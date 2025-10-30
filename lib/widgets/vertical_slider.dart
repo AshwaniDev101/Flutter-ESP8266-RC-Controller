@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
 
+/// A vertical slider with discrete steps, used for controlling motor speed.
 class VerticalStepSlider extends StatelessWidget {
   final double value;
   final ValueChanged<dynamic> onChanged;
@@ -20,16 +21,16 @@ class VerticalStepSlider extends StatelessWidget {
         min: 0.0,
         max: 10.0,
         value: value,
-        stepSize: 1,       // 10 steps total (0, 0.5, 1, ..., 5)
-        interval: 1,         // Major tick every 1 unit
-        minorTicksPerInterval: 0, // 1 small tick between each major tick
+        stepSize: 1,
+        interval: 1,
+        minorTicksPerInterval: 0,
         showTicks: true,
         showLabels: true,
         activeColor: Colors.teal,
         inactiveColor: Colors.grey,
         labelPlacement: LabelPlacement.onTicks,
+        // Hides labels for non-integer values to keep the UI clean.
         labelFormatterCallback: (dynamic actualValue, String formattedText) {
-          // Show label only on integers
           if (actualValue % 1 == 0) {
             return actualValue.toInt().toString();
           }

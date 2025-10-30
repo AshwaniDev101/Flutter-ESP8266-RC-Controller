@@ -48,9 +48,8 @@ class _ControllerScreenState extends State<ControllerScreen> {
   ConnectionStatus _connectionStatus = ConnectionStatus.DISCONNETED;
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
-  final _controller = StreamController<String>.broadcast();
+  Timer? _pingTimer;
 
-  Stream<String> get messages => _controller.stream;
   final String ip =  Config.ip;
   final int port = Config.port;
   String get _url => "ws://$ip:$port";
@@ -62,20 +61,52 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
   void connect() {
     if (_connectionStatus == ConnectionStatus.CONNECTED) return;
+    DebugLogger.log('Connecting to $_url...');
     setState(() => _connectionStatus = ConnectionStatus.CONNECTING);
 
     _channel = WebSocketChannel.connect(Uri.parse(_url));
     _subscription = _channel!.stream.listen(
           (message) {
         if (_connectionStatus != ConnectionStatus.CONNECTED) {
+          DebugLogger.log('Connection established.');
           setState(() => _connectionStatus = ConnectionStatus.CONNECTED);
+          // Start a periodic ping to measure round-trip latency.
+          _pingTimer = Timer.periodic(const Duration(seconds: 2), (_) => _sendPingRequest());
         }
-        _controller.add(message.toString());
+        
+        try {
+          final data = jsonDecode(message);
+          // Handle pong responses separately to calculate latency.
+          if (data is Map<String, dynamic> && data.containsKey('pong_timestamp')) {
+            final timestamp = data['pong_timestamp'];
+            if (timestamp is int) {
+              final latency = DateTime.now().millisecondsSinceEpoch - timestamp;
+              DebugLogger.updatePing(latency);
+            }
+          } else {
+            DebugLogger.log('RX: $message');
+          }
+        } catch (e) {
+          // If it's not valid JSON, just log the raw message.
+          DebugLogger.log('RX: $message');
+        }
       },
-      onDone: () => setState(() => _connectionStatus = ConnectionStatus.DISCONNETED),
-      onError: (_) => setState(() => _connectionStatus = ConnectionStatus.DISCONNETED),
+      onDone: () {
+        DebugLogger.log('Connection closed.');
+        setState(() => _connectionStatus = ConnectionStatus.DISCONNETED);
+      },
+      onError: (error) {
+        DebugLogger.log('Error: $error');
+        setState(() => _connectionStatus = ConnectionStatus.DISCONNETED);
+      },
       cancelOnError: true,
     );
+  }
+
+  void _sendPingRequest() {
+    final payload = {'ping_timestamp': DateTime.now().millisecondsSinceEpoch};
+    final jsonPayload = jsonEncode(payload);
+    _channel?.sink.add(jsonPayload);
   }
 
   void sendMotorCommand() {
@@ -87,22 +118,26 @@ class _ControllerScreenState extends State<ControllerScreen> {
       "LS": mapSliderToPWM(leftSliderValue),
       "RS": mapSliderToPWM(rightSliderValue),
     };
-    _channel?.sink.add(jsonEncode(command));
+    final jsonCommand = jsonEncode(command);
+    _channel?.sink.add(jsonCommand);
+    DebugLogger.log('TX: $jsonCommand');
   }
 
   void disconnect() {
+    DebugLogger.log('Disconnecting...');
+    _pingTimer?.cancel();
     _subscription?.cancel();
     _channel?.sink.close();
     _channel = null;
     setState(() => _connectionStatus = ConnectionStatus.DISCONNETED);
   }
 
+  /// Maps a slider value from 0-10 to a PWM signal from 0-255.
   int mapSliderToPWM(double sliderValue) => (sliderValue * (255 / 10)).round();
 
   @override
   void dispose() {
     disconnect();
-    _controller.close();
     super.dispose();
   }
 
@@ -129,7 +164,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                       onChanged: (value) {
                         setState(() {
                           isLockSpeeds = value;
-                          rightSliderValue = leftSliderValue;
+                          if (isLockSpeeds) rightSliderValue = leftSliderValue;
                         });
                       },
                     ),
@@ -207,7 +242,6 @@ class _ControllerScreenState extends State<ControllerScreen> {
                     ],
                   ),
                   const SizedBox(width: 20),
-                  // Middle debugConsole expands
                   Expanded(
                     child: SizedBox(
                       height: 200,

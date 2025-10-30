@@ -11,29 +11,7 @@ import 'package:web_socket_channel/status.dart' as status;
 /// - Listen to incoming messages
 /// - Disconnect gracefully
 /// - Automatically reconnect on failure
-///
-/// Example usage:
-/// ```dart
-/// void main() {
-///   final ws = WebSocketManager("....", ...);
-///
-///   // Connect to the server
-///   ws.connect();
-///
-///   // Listen for incoming messages
-///   ws.messages.listen((msg) {
-///     print("📩 Received: $msg");
-///   });
-///
-///   // Send a message
-///   ws.send("Hello ESP8266!");
-///
-///   // Disconnect after 10 seconds
-///   Future.delayed(Duration(seconds: 10), () {
-///     ws.disconnect();
-///   });
-/// }
-/// ```
+
 class WebSocketManager {
   final String ip;
   final int port;
