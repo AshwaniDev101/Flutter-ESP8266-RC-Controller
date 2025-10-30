@@ -9,37 +9,44 @@ import 'debug_console.dart';
 enum ConnectionStatus { CONNECTED, DISCONNECTED, CONNECTING }
 
 class ControlPanelViewModel extends ChangeNotifier {
-  // Private state variables
+  // --- State Variables ---
   double _leftSliderValue = 0;
   double _rightSliderValue = 0;
   bool _isLockSpeeds = false;
   bool _isHotMode = false;
   ConnectionStatus _connectionStatus = ConnectionStatus.DISCONNECTED;
+  bool _isEditingIp = false;
+  String _ip = Config.ip;
+  final int _port = Config.port;
 
-  // WebSocket related
+  // --- Controllers ---
+  late TextEditingController ipAddressController;
+
+  // --- WebSocket & Timers ---
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   Timer? _pingTimer;
 
-  // Button states
+  // --- Button States ---
   bool _btnLeftForwardPressed = false;
   bool _btnLeftBackwardPressed = false;
   bool _btnRightForwardPressed = false;
   bool _btnRightBackwardPressed = false;
 
-  // Public getters for the View to access state
+  // --- Public Getters ---
   double get leftSliderValue => _leftSliderValue;
   double get rightSliderValue => _rightSliderValue;
   bool get isLockSpeeds => _isLockSpeeds;
   bool get isHotMode => _isHotMode;
   ConnectionStatus get connectionStatus => _connectionStatus;
-
-  // Configuration
-  final String _ip = Config.ip;
-  final int _port = Config.port;
+  bool get isEditingIp => _isEditingIp;
   String get _url => "ws://$_ip:$_port";
 
-  // --- Public methods for the View to call ---
+  ControlPanelViewModel() {
+    ipAddressController = TextEditingController(text: _ip);
+  }
+
+  // --- UI Actions ---
 
   void setLockSpeeds(bool value) {
     _isLockSpeeds = value;
@@ -72,21 +79,25 @@ class ControlPanelViewModel extends ChangeNotifier {
 
   void setButtonState(String button, bool isPressed) {
     switch (button) {
-      case 'BLF':
-        _btnLeftForwardPressed = isPressed;
-        break;
-      case 'BLB':
-        _btnLeftBackwardPressed = isPressed;
-        break;
-      case 'BRF':
-        _btnRightForwardPressed = isPressed;
-        break;
-      case 'BRB':
-        _btnRightBackwardPressed = isPressed;
-        break;
+      case 'BLF': _btnLeftForwardPressed = isPressed; break;
+      case 'BLB': _btnLeftBackwardPressed = isPressed; break;
+      case 'BRF': _btnRightForwardPressed = isPressed; break;
+      case 'BRB': _btnRightBackwardPressed = isPressed; break;
     }
     sendMotorCommand();
   }
+
+  void toggleIpEditMode() {
+    if (_isEditingIp) {
+      // If we were editing, now we are saving.
+      _ip = ipAddressController.text;
+      DebugLogger.log('IP Address updated to: $_ip');
+    }
+    _isEditingIp = !_isEditingIp;
+    notifyListeners();
+  }
+
+  // --- WebSocket Logic ---
 
   void connect() {
     if (_connectionStatus == ConnectionStatus.CONNECTED) return;
@@ -158,6 +169,7 @@ class ControlPanelViewModel extends ChangeNotifier {
   }
 
   void disconnect() {
+    if (_connectionStatus == ConnectionStatus.DISCONNECTED) return;
     DebugLogger.log('Disconnecting...');
     _pingTimer?.cancel();
     _subscription?.cancel();
@@ -172,6 +184,7 @@ class ControlPanelViewModel extends ChangeNotifier {
   @override
   void dispose() {
     disconnect();
+    ipAddressController.dispose();
     super.dispose();
   }
 }
